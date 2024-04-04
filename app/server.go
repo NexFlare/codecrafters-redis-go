@@ -19,9 +19,23 @@ func main() {
 		os.Exit(1)
 	}
 	c, err := l.Accept()
-	c.Write([]byte("+PONG\r\n"))
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+	defer c.Close()
+	for {
+		// defer c.Close()
+		buffer := make([]byte, 128)
+		_, err = c.Read(buffer)
+		if err != nil {
+			fmt.Println("Error reading command: ", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println("Command is: ", string(buffer))
+		c.Write([]byte("+PONG\r\n"))
+		
+	}
+	
+	
 }
