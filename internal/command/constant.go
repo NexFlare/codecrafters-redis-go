@@ -7,4 +7,5 @@ const (
 	SET CommandType = "set"
 	GET CommandType = "get"
 	ECHO CommandType = "echo"
+	INFO CommandType = "info"
 )

@@ -41,7 +41,7 @@ func parseCommand(data string) (string, []string, error){
 		return "", nil, err
 	}
 	if len(split) > 2 {
-		cmd = split[2]
+		cmd = strings.ToLower(split[2])
 	}
 	for i := 4; i<=arrSize*2; i+=2  {
 		args = append(args, split[i])

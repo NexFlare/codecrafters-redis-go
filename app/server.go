@@ -57,12 +57,10 @@ func main() {
 func handleCommand(c net.Conn, data string) {
 	
 	cmd := command.NewCommand(data)
-
 	if cmd == nil {
 		c.Write([]byte(getSimpleString("ERROR")))
 		return
 	}
-
 	switch cmd.Command {
 	case command.PING:
 		c.Write([]byte(getSimpleString("PONG")))
@@ -87,9 +85,11 @@ func handleCommand(c net.Conn, data string) {
 	case command.GET:
 		str := storedData.Get(cmd.Arguments[0])
 		c.Write([]byte(getBulkString(str)))
-
+	case command.INFO:
+		c.Write([]byte(getBulkString("role:master")))
+		return
 	default:
-		c.Write([]byte(getSimpleString("PONG")))
+		c.Write([]byte(getSimpleString("PIONG")))
 	}
 	
 }
@@ -102,5 +102,7 @@ func getBulkString(val string) string {
 	if len(val) == 0 {
 		return fmt.Sprintf("$%d\r\n", -1)
 	}
-	return fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
+	str := fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
+	fmt.Println("bulk stirng is", str)
+	return str
 }
