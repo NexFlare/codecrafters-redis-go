@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,10 +8,13 @@ import (
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+
+	"github.com/codecrafters-io/redis-starter-go/internal/command"
+	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
 var (
-	storedData map[string]string = map[string]string{}
+	storedData store.Store = store.GetStore()
 )
 
 func main() {
@@ -51,106 +53,41 @@ func main() {
 
 func handleCommand(c net.Conn, data string) {
 	
-	if isValid := validateCommand(data); !isValid {
-		return
-	}
-	cmd, err := getCommand(data)
+	cmd := command.NewCommand(data)
 
-	if err != nil {
+	if cmd == nil {
+		c.Write([]byte(getSimpleString("ERROR")))
 		return
 	}
 
-	switch *cmd {
-	case "ping":
+	switch cmd.Command {
+	case command.PING:
 		c.Write([]byte(getSimpleString("PONG")))
-	case "echo":
-		str, err := handleString(data)
-		if err != nil {
-			fmt.Println("ERror is ", err.Error())
-			c.Write([]byte("+ERROR\r\n"))
-		}
-		if err == nil {
-			c.Write([]byte(fmt.Sprintf("+%s\r\n", *str)))
-		}
-	case "set":
-		if saveData(data) {
+	case command.ECHO:
+		str := strings.Join(cmd.Arguments, " ")
+		c.Write([]byte(getSimpleString(str)))
+	case command.SET:
+		if len(cmd.Arguments) == 2 {
+			storedData.Set(cmd.Arguments[0], cmd.Arguments[1])
 			c.Write([]byte(getSimpleString("OK")))
-		}else {
-			c.Write([]byte(getSimpleString("ERROR")))
-		}
-	case "get":
-		str := getData(data)
-		if str != nil {
-			c.Write([]byte(getBulkString(*str)))
+		} else if len(cmd.Arguments) == 4 {
+			duration, err := strconv.Atoi(cmd.Arguments[3])
+			if err != nil {
+				c.Write([]byte(getSimpleString("ERROR")))
+				return
+			}
+			storedData.SetWithExpiry(cmd.Arguments[0], cmd.Arguments[1], int64(duration))
+			c.Write([]byte(getSimpleString("OK")))
 		} else {
-			c.Write([]byte(getBulkString("")))
+			c.Write([]byte(getSimpleString("")))
 		}
+	case command.GET:
+		str := storedData.Get(cmd.Arguments[0])
+		c.Write([]byte(getBulkString(str)))
 
 	default:
-		c.Write([]byte("+PING\r\n"))
+		c.Write([]byte(getSimpleString("PONG")))
 	}
-	
-}
-
-func handleString(data string) (*string, error) {
-	split := strings.Split(data, "\r\n")
-	var ans string = ""
-	for i := 3;i<len(split)-1;i+=2 {
-		desiredStrLen, err := strconv.Atoi(split[i][1:])
-		if err != nil {
-			return nil, err
-		}
-		if desiredStrLen != len(split[i+1]) {
-			return nil, errors.New("invalid command")
-		}
-		ans = fmt.Sprintf("%s %s", ans, split[i+1])
-	}
-	ans = strings.TrimLeft(ans, " ")
-	return &ans, nil
-}
-
-
-func getCommand(data string) (*string, error) {
-	split := strings.Split(data, "\r\n")
-	if len(split) > 2 {
-		return &split[2], nil
-	}
-	return nil, errors.New("no command")
-}
-
-func validateCommand(data string) bool {
-	split := strings.Split(data, "\r\n")
-	firstLine := split[0]
-	firstLineSplit := firstLine[1:]
-	noOfWord, err := strconv.Atoi(firstLineSplit)
-	if err != nil {
-		return false
-	}
-	if firstLine[0] != '*' || (noOfWord * 2 +2) != len(split) {
-		return false
-	}
-	return true
-}
-
-func saveData(data string) bool {
-	split := strings.Split(data, "\r\n")
-	if len(split) < 8 {
-		return false
-	}
-	storedData[split[4]] = split[6]
-	return true
-}
-
-func getData(data string) *string {
-	split := strings.Split(data, "\r\n")
-	if len(split) < 6 {
-		return nil
-	}
-	_data := storedData[split[4]]
-	if len(_data) == 0 {
-		return nil
-	}
-	return &_data
 	
 }
 
@@ -160,7 +97,7 @@ func getSimpleString(val string) string {
 
 func getBulkString(val string) string {
 	if len(val) == 0 {
-		return fmt.Sprintf("%d\r\n", -1)
+		return fmt.Sprintf("$%d\r\n", -1)
 	}
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
 }
