@@ -25,7 +25,8 @@ func GetStore() Store{
 }
 
 func(s Store) Set(key string, value string) {
-
+	mutex.Lock()
+	defer mutex.Unlock()
 	storeData := store[key]
 
 	if storeData != (StoreData{}) {
@@ -39,7 +40,7 @@ func(s Store) Set(key string, value string) {
 func(s Store) SetWithExpiry(key string, value string, duration int64) {
 	mutex.Lock()
 	storeData, exists := store[key]
-	if exists {
+	if exists && storeData.ch != nil {
 		storeData.ch <- true
 	}
 	
