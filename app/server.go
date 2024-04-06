@@ -16,11 +16,13 @@ import (
 
 var (
 	storedData store.Store = store.GetStore()
+	replica *string
 )
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 	port := flag.String("port", "6379", "port to listen on")
+	replica = flag.String("replicaof", "", "replica of")
 	flag.Parse()
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
 	if err != nil {
@@ -86,6 +88,10 @@ func handleCommand(c net.Conn, data string) {
 		str := storedData.Get(cmd.Arguments[0])
 		c.Write([]byte(getBulkString(str)))
 	case command.INFO:
+		fmt.Println("Replica flag", *replica)
+		if len(cmd.Arguments) > 0 && len(*replica) > 0 {
+			c.Write([]byte(getBulkString("role:slave")))
+		}
 		c.Write([]byte(getBulkString("role:master")))
 		return
 	default:
@@ -103,6 +109,5 @@ func getBulkString(val string) string {
 		return fmt.Sprintf("$%d\r\n", -1)
 	}
 	str := fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
-	fmt.Println("bulk stirng is", str)
 	return str
 }
