@@ -49,6 +49,10 @@ func(r* Redis) StartRedis() {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
+	fmt.Println("Role is", r.Replication.Role)
+	if r.Replication.Role == "slave" {
+		r.handleHandShake()
+	}
 
 	for {
 		c, err := l.Accept()
@@ -148,4 +152,43 @@ func getBulkString(val string) string {
 	}
 	str := fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
 	return str
+}
+
+func getArrayString(val string) string {
+	splitArr := strings.Split(val, "\r\n")
+	totalLen:=0
+	for i:=0;i<len(splitArr); {
+		if len(splitArr[i]) > 0 {
+			totalLen++
+			switch splitArr[i][0] {
+			case '$':
+				i+=2
+			case '*':
+				nestedArrayLen, err := strconv.Atoi(splitArr[i][1:])
+				if err != nil {
+					fmt.Println("error while parsing command", err.Error())
+				} else {
+					i+=(nestedArrayLen+1)
+				}
+			default:
+				i++
+			}
+		} else {
+			i++
+		}
+ 	}
+	return fmt.Sprintf("*%d\r\n%s", totalLen, val)
+}
+
+func(r* Redis) handleHandShake() {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", r.Replication.MasterHost, r.Replication.MasterPort))
+	go func() {
+		if err == nil {
+			req := getArrayString(getBulkString("ping"))
+			conn.Write([]byte(req))
+		} else {
+			fmt.Println("error while establishing connections", err.Error())
+		}
+	}()
+	
 }
