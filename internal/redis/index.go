@@ -192,25 +192,21 @@ func(r* Redis) handleHandShake() {
 		return
 	}
 	ch := make(chan(int))
-	req := getArrayString(getBulkString("ping"))
-	go r.handleHandShakeRequest(conn, req, ch)
-	resp := <- ch
-	if resp == 0 {
-		return
+
+	handShakeArray := []string {
+		"ping",
+		fmt.Sprintf("REPLCONF listening-port %d", r.port),
+		"REPLCONF capa psync2",
+		"PSYNC ? -1",
 	}
 
-	req = getArrayString(getBulkString(fmt.Sprintf("REPLCONF listening-port %d", r.port)))
-	go r.handleHandShakeRequest(conn, req, ch)
-	resp = <- ch
-	if resp == 0 {
-		return
-	}
-
-	req = getArrayString(getBulkString("REPLCONF capa psync2"))
-	go r.handleHandShakeRequest(conn, req, ch)
-	resp = <- ch
-	if resp == 0 {
-		return
+	for _, s := range(handShakeArray) {
+		s = getArrayString(getBulkString(s))
+		go r.handleHandShakeRequest(conn, s, ch)
+		resp := <- ch
+		if resp == 0 {
+			return
+		}
 	}
 }
 
