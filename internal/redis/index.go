@@ -51,7 +51,7 @@ func(r* Redis) StartRedis() {
 	}
 	fmt.Println("Role is", r.Replication.Role)
 	if r.Replication.Role == "slave" {
-		r.handleHandShake()
+		go r.handleHandShake()
 	}
 
 	for {
@@ -150,7 +150,11 @@ func getBulkString(val string) string {
 	if len(val) == 0 {
 		return fmt.Sprintf("$%d\r\n", -1)
 	}
-	str := fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
+	var str string
+	split := strings.Split(val, " ")
+	for _, item := range(split) {
+		str = fmt.Sprintf("%s$%d\r\n%s\r\n", str, len(item), item)
+	}
 	return str
 }
 
@@ -182,13 +186,54 @@ func getArrayString(val string) string {
 
 func(r* Redis) handleHandShake() {
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", r.Replication.MasterHost, r.Replication.MasterPort))
-	go func() {
-		if err == nil {
-			req := getArrayString(getBulkString("ping"))
-			conn.Write([]byte(req))
-		} else {
-			fmt.Println("error while establishing connections", err.Error())
-		}
-	}()
-	
+	defer conn.Close()
+	if err != nil {
+		fmt.Println("error is ", err.Error())
+		return
+	}
+	ch := make(chan(int))
+	req := getArrayString(getBulkString("ping"))
+	go r.handleHandShakeRequest(conn, req, ch)
+	resp := <- ch
+	if resp == 0 {
+		return
+	}
+
+	req = getArrayString(getBulkString(fmt.Sprintf("REPLCONF listening-port %d", r.port)))
+	go r.handleHandShakeRequest(conn, req, ch)
+	resp = <- ch
+	if resp == 0 {
+		return
+	}
+
+	req = getArrayString(getBulkString("REPLCONF capa psync2"))
+	go r.handleHandShakeRequest(conn, req, ch)
+	resp = <- ch
+	if resp == 0 {
+		return
+	}
+}
+
+func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
+	if len(val) == 0 {
+		fmt.Println("NO value of string")
+		ch <- 0
+	}
+	_, err := conn.Write([]byte(val))
+
+	if err != nil {
+		fmt.Println("error is ", err.Error())
+		ch <- 0
+		return
+	}
+	reply := make([]byte, 256)
+	_, err = conn.Read(reply)
+	fmt.Println("Reply is ", string(reply))
+	if err != nil {
+		fmt.Println("error is ", err.Error())
+		ch <- 0
+		return
+	}
+	ch <- 1
+
 }
