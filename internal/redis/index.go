@@ -137,7 +137,7 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 		c.Write([]byte(getBulkString(handleInfoCommand(r.Replication))))
 		return
 	default:
-		c.Write([]byte(getSimpleString("PIONG")))
+		c.Write([]byte(getSimpleString("OK")))
 	}
 	
 }
@@ -224,7 +224,6 @@ func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
 	}
 	reply := make([]byte, 256)
 	_, err = conn.Read(reply)
-	fmt.Println("Reply is ", string(reply))
 	if err != nil {
 		fmt.Println("error is ", err.Error())
 		ch <- 0
