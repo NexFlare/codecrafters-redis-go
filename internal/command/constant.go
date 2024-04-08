@@ -8,4 +8,6 @@ const (
 	GET CommandType = "get"
 	ECHO CommandType = "echo"
 	INFO CommandType = "info"
+	REPLCONF CommandType = "replconf"
+	PSYNC CommandType = "psync"
 )

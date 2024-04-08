@@ -136,6 +136,11 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 	case command.INFO:
 		c.Write([]byte(getBulkString(handleInfoCommand(r.Replication))))
 		return
+	case command.PSYNC:
+		if r.Replication.Role == "master" {
+			c.Write([]byte(getSimpleString(fmt.Sprintf("FULLRESYNC %s 0", r.Replication.MasterReplid))))
+		}
+		return
 	default:
 		c.Write([]byte(getSimpleString("OK")))
 	}
