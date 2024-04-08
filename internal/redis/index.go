@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/internal/command"
+	"github.com/codecrafters-io/redis-starter-go/internal/response"
 	"github.com/codecrafters-io/redis-starter-go/internal/store"
 )
 
@@ -43,7 +44,6 @@ func NewRedisServer() Redis {
 
 func(r* Redis) StartRedis() {
 	r.parseFlags()
-	fmt.Println("Port is", r.port)
 	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", r.port))
 	if err != nil {
 		fmt.Println(err.Error())
@@ -107,86 +107,47 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 	
 	cmd := command.NewCommand(data)
 	if cmd == nil {
-		c.Write([]byte(getSimpleString("ERROR")))
+		c.Write([]byte(response.GetSimpleString("ERROR")))
 		return
 	}
 	switch cmd.Command {
 	case command.PING:
-		c.Write([]byte(getSimpleString("PONG")))
+		c.Write([]byte(response.GetSimpleString("PONG")))
 	case command.ECHO:
-		c.Write([]byte(getSimpleString(handleEchoCommand(cmd.Arguments))))
+		c.Write([]byte(response.GetSimpleString(handleEchoCommand(cmd.Arguments))))
 	case command.SET:
 		if len(cmd.Arguments) == 2 {
 			r.Store.Set(cmd.Arguments[0], cmd.Arguments[1])
-			c.Write([]byte(getSimpleString("OK")))
+			c.Write([]byte(response.GetSimpleString("OK")))
 		} else if len(cmd.Arguments) == 4 {
 			duration, err := strconv.Atoi(cmd.Arguments[3])
 			if err != nil {
-				c.Write([]byte(getSimpleString("ERROR")))
+				c.Write([]byte(response.GetSimpleString("ERROR")))
 				return
 			}
 			r.Store.SetWithExpiry(cmd.Arguments[0], cmd.Arguments[1], int64(duration))
-			c.Write([]byte(getSimpleString("OK")))
+			c.Write([]byte(response.GetSimpleString("OK")))
 		} else {
-			c.Write([]byte(getSimpleString("")))
+			c.Write([]byte(response.GetSimpleString("")))
 		}
 	case command.GET:
 		str := r.Store.Get(cmd.Arguments[0])
-		c.Write([]byte(getBulkString(str)))
+		c.Write([]byte(response.GetBulkString(str)))
 	case command.INFO:
-		c.Write([]byte(getBulkString(handleInfoCommand(r.Replication))))
+		c.Write([]byte(response.GetBulkString(handleInfoCommand(r.Replication))))
 		return
 	case command.PSYNC:
 		if r.Replication.Role == "master" {
-			c.Write([]byte(getSimpleString(fmt.Sprintf("FULLRESYNC %s 0", r.Replication.MasterReplid))))
+			r.handlePsyncCommand(func (s string) {
+				c.Write([]byte(s))
+			})
+			
 		}
 		return
 	default:
-		c.Write([]byte(getSimpleString("OK")))
+		c.Write([]byte(response.GetSimpleString("OK")))
 	}
 	
-}
-
-func getSimpleString(val string) string {
-	return fmt.Sprintf("+%s\r\n", val)
-}
-
-func getBulkString(val string) string {
-	if len(val) == 0 {
-		return fmt.Sprintf("$%d\r\n", -1)
-	}
-	var str string
-	split := strings.Split(val, " ")
-	for _, item := range(split) {
-		str = fmt.Sprintf("%s$%d\r\n%s\r\n", str, len(item), item)
-	}
-	return str
-}
-
-func getArrayString(val string) string {
-	splitArr := strings.Split(val, "\r\n")
-	totalLen:=0
-	for i:=0;i<len(splitArr); {
-		if len(splitArr[i]) > 0 {
-			totalLen++
-			switch splitArr[i][0] {
-			case '$':
-				i+=2
-			case '*':
-				nestedArrayLen, err := strconv.Atoi(splitArr[i][1:])
-				if err != nil {
-					fmt.Println("error while parsing command", err.Error())
-				} else {
-					i+=(nestedArrayLen+1)
-				}
-			default:
-				i++
-			}
-		} else {
-			i++
-		}
- 	}
-	return fmt.Sprintf("*%d\r\n%s", totalLen, val)
 }
 
 func(r* Redis) handleHandShake() {
@@ -206,7 +167,7 @@ func(r* Redis) handleHandShake() {
 	}
 
 	for _, s := range(handShakeArray) {
-		s = getArrayString(getBulkString(s))
+		s = response.GetArrayString(response.GetBulkString(s))
 		go r.handleHandShakeRequest(conn, s, ch)
 		resp := <- ch
 		if resp == 0 {
