@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/internal/command"
 	"github.com/codecrafters-io/redis-starter-go/internal/response"
 )
 
@@ -33,12 +34,29 @@ func(r *Redis) handlePsyncCommand(f func(string)) {
 	}
 }
 
-func HexToBin(hex string) (string, error) {
-	ui, err := strconv.ParseUint(hex, 16, 64)
-	if err != nil {
-		return "", err
+func(r *Redis) handleSetCommand(cmd *command.Command, f func(string)) {
+	var responseString string
+	var hasError bool
+	if len(cmd.Arguments) == 2 {
+		r.Store.Set(cmd.Arguments[0], cmd.Arguments[1])
+		responseString = response.GetSimpleString("OK")
+	} else if len(cmd.Arguments) == 4 {
+		duration, err := strconv.Atoi(cmd.Arguments[3])
+		if err != nil {
+			responseString = response.GetSimpleString("ERROR")
+			hasError = true
+		} else {
+			r.Store.SetWithExpiry(cmd.Arguments[0], cmd.Arguments[1], int64(duration))
+			responseString = response.GetSimpleString("OK")
+		}
+	} else {
+		responseString = response.GetSimpleString("")
 	}
-
-	// %016b indicates base 2, zero padded, with 16 characters
-	return fmt.Sprintf("%016b", ui), nil
+	f(responseString)
+	if !hasError {
+		for _, conn := range(r.Replication.ReplicationConnection) {
+			regenratedCmd := response.GetBulkString(string(cmd.Command) + " " + strings.Join(cmd.Arguments, " "))
+			conn.Write([]byte(fmt.Sprintf("*%d\r\n%s", len(cmd.Arguments) + 1, regenratedCmd)))
+		}
+	}
 }

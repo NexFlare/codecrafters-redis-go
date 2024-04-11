@@ -7,6 +7,7 @@ import (
 )
 
 type Command struct {
+	CommandString string
 	Command CommandType
 	Arguments []string
 }
@@ -20,6 +21,7 @@ func NewCommand(data string) *Command {
 	return &Command{
 		Command: CommandType(cmd),
 		Arguments: args,
+		CommandString: data,
 	}
 }
 

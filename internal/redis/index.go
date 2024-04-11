@@ -20,6 +20,7 @@ type Replication struct {
 	ReplBacklogActive bool
 	MasterHost string
 	MasterPort string
+	ReplicationConnection []net.Conn
 }
 
 
@@ -37,6 +38,7 @@ func NewRedisServer() Redis {
 			Role: "master",
 			MasterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 			MasterReplOffset: 0,
+			ReplicationConnection: []net.Conn{}, 
 		},
 		Store: store.GetStore(),
 	}
@@ -56,11 +58,11 @@ func(r* Redis) StartRedis() {
 
 	for {
 		c, err := l.Accept()
+		defer c.Close()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		defer c.Close()
 		go func() {
 			buffer := make([]byte, 128)
 			for {
@@ -69,12 +71,10 @@ func(r* Redis) StartRedis() {
 					fmt.Println("Error reading command: ", err.Error())
 					return
 				}
-				fmt.Println("CMD is", string(buffer))
 				req := string(buffer)
-				r.handleCommand(c, req)
+				r.handleCommand(c, req, true)
 				buffer =  make([]byte, 128)
 			}
-			
 		}()
 	}
 }
@@ -103,11 +103,11 @@ func(r* Redis) parseFlags() {
 	}
 }
 
-func(r *Redis) handleCommand(c net.Conn, data string) {
+func(r *Redis) handleCommand(c net.Conn, data string, sendResponse bool) {
 	
 	cmd := command.NewCommand(data)
 	if cmd == nil {
-		c.Write([]byte(response.GetSimpleString("ERROR")))
+		// c.Write([]byte(response.GetSimpleString("ERROR")))
 		return
 	}
 	switch cmd.Command {
@@ -116,20 +116,11 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 	case command.ECHO:
 		c.Write([]byte(response.GetSimpleString(handleEchoCommand(cmd.Arguments))))
 	case command.SET:
-		if len(cmd.Arguments) == 2 {
-			r.Store.Set(cmd.Arguments[0], cmd.Arguments[1])
-			c.Write([]byte(response.GetSimpleString("OK")))
-		} else if len(cmd.Arguments) == 4 {
-			duration, err := strconv.Atoi(cmd.Arguments[3])
-			if err != nil {
-				c.Write([]byte(response.GetSimpleString("ERROR")))
-				return
+		r.handleSetCommand(cmd, func(s string) {
+			if sendResponse {
+				c.Write([]byte(s))
 			}
-			r.Store.SetWithExpiry(cmd.Arguments[0], cmd.Arguments[1], int64(duration))
-			c.Write([]byte(response.GetSimpleString("OK")))
-		} else {
-			c.Write([]byte(response.GetSimpleString("")))
-		}
+		})
 	case command.GET:
 		str := r.Store.Get(cmd.Arguments[0])
 		c.Write([]byte(response.GetBulkString(str)))
@@ -137,12 +128,10 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 		c.Write([]byte(response.GetBulkString(handleInfoCommand(r.Replication))))
 		return
 	case command.PSYNC:
-		if r.Replication.Role == "master" {
-			r.handlePsyncCommand(func (s string) {
-				c.Write([]byte(s))
-			})
-			
-		}
+		r.Replication.ReplicationConnection = append(r.Replication.ReplicationConnection, c)
+		r.handlePsyncCommand(func (s string) {
+			c.Write([]byte(s))
+		})
 		return
 	default:
 		c.Write([]byte(response.GetSimpleString("OK")))
@@ -152,7 +141,8 @@ func(r *Redis) handleCommand(c net.Conn, data string) {
 
 func(r* Redis) handleHandShake() {
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", r.Replication.MasterHost, r.Replication.MasterPort))
-	defer conn.Close()
+	// Not closing the connection as it will be used for replication
+	// defer conn.Close()
 	if err != nil {
 		fmt.Println("error is ", err.Error())
 		return
@@ -171,9 +161,25 @@ func(r* Redis) handleHandShake() {
 		go r.handleHandShakeRequest(conn, s, ch)
 		resp := <- ch
 		if resp == 0 {
+			fmt.Println("Error in handshake")
+			conn.Close()
 			return
 		}
 	}
+	
+	for {
+		buffer := make([]byte, 128)
+		_, err = conn.Read(buffer)
+		if err == nil {
+			// fmt.Println("Got command ", string(buffer))
+			strBuffer := strings.Trim(string(buffer), "\x00")
+			if len(strBuffer) > 0 {
+				fmt.Println("Got command ", strBuffer)
+				r.handleCommand(conn, strBuffer, false)
+			}
+		}
+	}
+	
 }
 
 func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
