@@ -104,39 +104,39 @@ func(r* Redis) parseFlags() {
 }
 
 func(r *Redis) handleCommand(c net.Conn, data string, sendResponse bool) {
-	
-	cmd := command.NewCommand(data)
-	if cmd == nil {
-		// c.Write([]byte(response.GetSimpleString("ERROR")))
-		return
-	}
-	switch cmd.Command {
-	case command.PING:
-		c.Write([]byte(response.GetSimpleString("PONG")))
-	case command.ECHO:
-		c.Write([]byte(response.GetSimpleString(handleEchoCommand(cmd.Arguments))))
-	case command.SET:
-		r.handleSetCommand(cmd, func(s string) {
-			if sendResponse {
+	cmdList := command.NewCommands(data)
+	for _, cmd := range cmdList {
+		if cmd == nil {
+			c.Write([]byte("-Error"))
+			return
+		}
+		switch cmd.Command {
+		case command.PING:
+			c.Write([]byte(response.GetSimpleString("PONG")))
+		case command.ECHO:
+			c.Write([]byte(response.GetSimpleString(handleEchoCommand(cmd.Arguments))))
+		case command.SET:
+			r.handleSetCommand(cmd, func(s string) {
+				if sendResponse {
+					c.Write([]byte(s))
+				}
+			})
+		case command.GET:
+			str := r.Store.Get(cmd.Arguments[0])
+			c.Write([]byte(response.GetBulkString(str)))
+		case command.INFO:
+			c.Write([]byte(response.GetBulkString(handleInfoCommand(r.Replication))))
+			return
+		case command.PSYNC:
+			r.Replication.ReplicationConnection = append(r.Replication.ReplicationConnection, c)
+			r.handlePsyncCommand(func (s string) {
 				c.Write([]byte(s))
-			}
-		})
-	case command.GET:
-		str := r.Store.Get(cmd.Arguments[0])
-		c.Write([]byte(response.GetBulkString(str)))
-	case command.INFO:
-		c.Write([]byte(response.GetBulkString(handleInfoCommand(r.Replication))))
-		return
-	case command.PSYNC:
-		r.Replication.ReplicationConnection = append(r.Replication.ReplicationConnection, c)
-		r.handlePsyncCommand(func (s string) {
-			c.Write([]byte(s))
-		})
-		return
-	default:
-		c.Write([]byte(response.GetSimpleString("OK")))
+			})
+			return
+		default:
+			c.Write([]byte(response.GetSimpleString("OK")))
+		}
 	}
-	
 }
 
 func(r* Redis) handleHandShake() {
@@ -161,7 +161,6 @@ func(r* Redis) handleHandShake() {
 		go r.handleHandShakeRequest(conn, s, ch)
 		resp := <- ch
 		if resp == 0 {
-			fmt.Println("Error in handshake")
 			conn.Close()
 			return
 		}
@@ -174,7 +173,6 @@ func(r* Redis) handleHandShake() {
 			// fmt.Println("Got command ", string(buffer))
 			strBuffer := strings.Trim(string(buffer), "\x00")
 			if len(strBuffer) > 0 {
-				fmt.Println("Got command ", strBuffer)
 				r.handleCommand(conn, strBuffer, false)
 			}
 		}

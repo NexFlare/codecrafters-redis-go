@@ -25,6 +25,19 @@ func NewCommand(data string) *Command {
 	}
 }
 
+func NewCommands(data string) []*Command {
+	split := strings.Split(data, "*")
+	commands := []*Command{}
+	if len(split) > 1 {
+		split = split[1:]
+		for _, s := range split {
+			commands = append(commands, NewCommand("*" + s))
+		}
+	}
+	fmt.Println("Command length is", len(commands))
+	return commands
+}
+
 // CMD is *3
 // $3
 // set
