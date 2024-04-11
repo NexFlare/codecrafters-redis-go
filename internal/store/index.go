@@ -35,6 +35,7 @@ func(s Store) Set(key string, value string) {
 	store[key] = StoreData{
 		Data : value,
 	}
+	fmt.Println("Data set", key, value)
 }
 
 func(s Store) SetWithExpiry(key string, value string, duration int64) {
@@ -69,6 +70,7 @@ func(s Store) SetWithExpiry(key string, value string, duration int64) {
 
 func(s Store) Get(key string) string {
 	mutex.Lock()
-	defer mutex.Unlock()
-	return store[key].Data
+	ans := store[key].Data
+	mutex.Unlock()
+	return ans
 }

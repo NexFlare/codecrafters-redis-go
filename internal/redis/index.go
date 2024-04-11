@@ -165,15 +165,14 @@ func(r* Redis) handleHandShake() {
 			return
 		}
 	}
-	
+
 	for {
 		buffer := make([]byte, 128)
 		_, err = conn.Read(buffer)
 		if err == nil {
-			// fmt.Println("Got command ", string(buffer))
 			strBuffer := strings.Trim(string(buffer), "\x00")
 			if len(strBuffer) > 0 {
-				r.handleCommand(conn, strBuffer, false)
+				go r.handleCommand(conn, strBuffer, false)
 			}
 		}
 	}
@@ -185,6 +184,7 @@ func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
 		fmt.Println("NO value of string")
 		ch <- 0
 	}
+
 	_, err := conn.Write([]byte(val))
 
 	if err != nil {

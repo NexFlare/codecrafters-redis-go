@@ -34,7 +34,6 @@ func NewCommands(data string) []*Command {
 			commands = append(commands, NewCommand("*" + s))
 		}
 	}
-	fmt.Println("Command length is", len(commands))
 	return commands
 }
 

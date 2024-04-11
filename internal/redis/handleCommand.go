@@ -37,6 +37,7 @@ func(r *Redis) handlePsyncCommand(f func(string)) {
 func(r *Redis) handleSetCommand(cmd *command.Command, f func(string)) {
 	var responseString string
 	var hasError bool
+	var err error
 	if len(cmd.Arguments) == 2 {
 		r.Store.Set(cmd.Arguments[0], cmd.Arguments[1])
 		responseString = response.GetSimpleString("OK")
@@ -52,11 +53,13 @@ func(r *Redis) handleSetCommand(cmd *command.Command, f func(string)) {
 	} else {
 		responseString = response.GetSimpleString("")
 	}
-	f(responseString)
 	if !hasError {
 		for _, conn := range(r.Replication.ReplicationConnection) {
 			regenratedCmd := response.GetBulkString(string(cmd.Command) + " " + strings.Join(cmd.Arguments, " "))
 			conn.Write([]byte(fmt.Sprintf("*%d\r\n%s", len(cmd.Arguments) + 1, regenratedCmd)))
 		}
+	} else {
+		fmt.Println("Error while setting value", err.Error())
 	}
+	f(responseString)
 }
