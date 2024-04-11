@@ -68,5 +68,7 @@ func(s Store) SetWithExpiry(key string, value string, duration int64) {
 }
 
 func(s Store) Get(key string) string {
+	mutex.Lock()
+	defer mutex.Unlock()
 	return store[key].Data
 }
