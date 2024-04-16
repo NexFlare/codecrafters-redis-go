@@ -156,11 +156,13 @@ func(r* Redis) handleHandShake() {
 		"PSYNC ? -1",
 	}
 
-	for _, s := range(handShakeArray) {
+	for i, s := range(handShakeArray) {
 		s = response.GetArrayString(response.GetBulkString(s))
 		go r.handleHandShakeRequest(conn, s, ch)
 		resp := <- ch
+		fmt.Println("Response complete ", i, s)
 		if resp == 0 {
+			fmt.Println("Error in handshake. Closing connection")
 			conn.Close()
 			return
 		}
@@ -172,6 +174,7 @@ func(r* Redis) handleHandShake() {
 		if err == nil {
 			strBuffer := strings.Trim(string(buffer), "\x00")
 			if len(strBuffer) > 0 {
+				fmt.Println("Received command is ", strBuffer)
 				go r.handleCommand(conn, strBuffer, false)
 			}
 		}
@@ -194,6 +197,7 @@ func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
 	}
 	reply := make([]byte, 256)
 	_, err = conn.Read(reply)
+	// fmt.Println("Reply is ", string(reply))
 	if err != nil {
 		fmt.Println("error is ", err.Error())
 		ch <- 0
