@@ -25,8 +25,8 @@ func GetStore() Store{
 }
 
 func(s Store) Set(key string, value string) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	// mutex.Lock()
+	// defer mutex.Unlock()
 	storeData := store[key]
 
 	if storeData != (StoreData{}) {
@@ -39,7 +39,7 @@ func(s Store) Set(key string, value string) {
 }
 
 func(s Store) SetWithExpiry(key string, value string, duration int64) {
-	mutex.Lock()
+	// mutex.Lock()
 	storeData, exists := store[key]
 	if exists && storeData.ch != nil {
 		storeData.ch <- true
@@ -50,7 +50,7 @@ func(s Store) SetWithExpiry(key string, value string, duration int64) {
 		ch:   make(chan bool),
 	}
 	store[key] = storeData
-	mutex.Unlock()
+	// mutex.Unlock()
 
 	fmt.Println("Setting value with duration:", duration)
 
@@ -69,8 +69,8 @@ func(s Store) SetWithExpiry(key string, value string, duration int64) {
 }
 
 func(s Store) Get(key string) string {
-	mutex.Lock()
+	// mutex.Lock()
 	ans := store[key].Data
-	mutex.Unlock()
+	// mutex.Unlock()
 	return ans
 }
