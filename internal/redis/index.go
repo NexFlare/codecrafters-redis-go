@@ -174,7 +174,6 @@ func(r* Redis) handleHandShake() {
 		if err == nil {
 			strBuffer := strings.Trim(string(buffer), "\x00")
 			if len(strBuffer) > 0 {
-				fmt.Println("Received command is ", strBuffer)
 				go r.handleCommand(conn, strBuffer, false)
 			}
 		}
@@ -202,6 +201,11 @@ func(r* Redis) handleHandShakeRequest(conn net.Conn, val string, ch chan int) {
 		fmt.Println("error is ", err.Error())
 		ch <- 0
 		return
+	} else {
+		strBuffer := strings.Trim(string(reply), "\x00")
+		if len(strBuffer) > 0 {
+			go r.handleCommand(conn, strBuffer, false)
+		}
 	}
 	ch <- 1
 

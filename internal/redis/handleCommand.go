@@ -54,6 +54,7 @@ func(r *Redis) handleSetCommand(cmd *command.Command, f func(string)) {
 		responseString = response.GetSimpleString("")
 	}
 	if !hasError {
+		fmt.Println("The length of replication connection is", len(r.Replication.ReplicationConnection))
 		for _, conn := range(r.Replication.ReplicationConnection) {
 			regenratedCmd := response.GetBulkString(string(cmd.Command) + " " + strings.Join(cmd.Arguments, " "))
 			conn.Write([]byte(fmt.Sprintf("*%d\r\n%s", len(cmd.Arguments) + 1, regenratedCmd)))
